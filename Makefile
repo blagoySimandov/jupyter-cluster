@@ -1,8 +1,9 @@
 export PATH := $(HOME)/.local/bin:$(PATH)
 
-INVENTORY  := inventory.ini
-PLAYBOOK   := ansible-playbook -i $(INVENTORY)
-ANSIBLE    := ansible -i $(INVENTORY)
+INVENTORY      := inventory.ini
+PLAYBOOK       := ansible-playbook -i $(INVENTORY)
+PLAYBOOK_PRIV  := ansible-playbook -i $(INVENTORY) --ask-become-pass
+ANSIBLE_PRIV   := ansible -i $(INVENTORY) --ask-become-pass
 
 .DEFAULT_GOAL := help
 
@@ -29,16 +30,16 @@ syntax-check:
 	$(PLAYBOOK) site.yml --syntax-check
 
 deploy:
-	$(PLAYBOOK) site.yml
+	$(PLAYBOOK_PRIV) site.yml
 
 common:
-	$(PLAYBOOK) playbooks/common.yml
+	$(PLAYBOOK_PRIV) playbooks/common.yml
 
 gpu:
-	$(PLAYBOOK) playbooks/gpu.yml
+	$(PLAYBOOK_PRIV) playbooks/gpu.yml
 
 verify:
-	$(PLAYBOOK) playbooks/gpu.yml --tags verify
+	$(PLAYBOOK_PRIV) playbooks/gpu.yml --tags verify
 
 reboot-master:
-	$(ANSIBLE) master -m reboot --become
+	$(ANSIBLE_PRIV) master -m reboot --become
