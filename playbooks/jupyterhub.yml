@@ -124,7 +124,7 @@
 
     - name: Install jupyterhub-singleuser and kernel support into venv
       ansible.builtin.command:
-        cmd: "{{ worker_venv }}/bin/pip install jupyterhub jupyterlab notebook ipykernel"
+        cmd: "{{ worker_venv }}/bin/pip install jupyterhub jupyterlab notebook ipykernel batchspawner"
       register: pip_out
       changed_when: "'Successfully installed' in pip_out.stdout"
 
