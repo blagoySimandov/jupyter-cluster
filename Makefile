@@ -7,7 +7,7 @@ ANSIBLE_PRIV   := ansible -i $(INVENTORY) --ask-become-pass
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install ping syntax-check deploy common gpu verify reboot-master
+.PHONY: help install ping syntax-check deploy common gpu verify reboot-master reboot-workers
 
 help:
 	@echo "Targets:"
@@ -19,6 +19,7 @@ help:
 	@echo "  gpu            run CUDA/driver install (gpu_nodes)"
 	@echo "  verify         run nvidia-smi check after reboot"
 	@echo "  reboot-master  reboot master and wait for SSH"
+	@echo "  reboot-workers reboot all workers and wait for SSH"
 
 install:
 	python3 -m pip install -r requirements.txt --user --break-system-packages
@@ -43,3 +44,6 @@ verify:
 
 reboot-master:
 	$(ANSIBLE_PRIV) master -m reboot --become
+
+reboot-workers:
+	$(ANSIBLE_PRIV) workers -m reboot --become
