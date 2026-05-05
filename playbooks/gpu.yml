@@ -6,6 +6,12 @@
   hosts: gpu_nodes
   become: true
   tasks:
+    - name: Install kernel headers (DKMS needs these to compile nvidia.ko)
+      ansible.builtin.apt:
+        name:
+          - linux-headers-{{ ansible_kernel }}
+        state: present
+
     - name: Download CUDA keyring package
       ansible.builtin.get_url:
         url: "{{ cuda_keyring_url }}"
