@@ -1,35 +1,63 @@
 ---
-# Aligns UIDs/GIDs on worker to match master node.
-# master node: master=1000, blagoy=1001
-# worker node (broken): blagoy=1000, master=1001  → swap needed
-#
-# Run ONLY when no user is logged into the worker (usermod fails on active sessions).
-- name: Fix UID/GID mismatch on worker
+# Fixes swapped UIDs/GIDs on worker by installing a one-shot boot service.
+# Current state: blagoy=UID1000/GID9999, master=UID1001/GID1001
+# Target state:  blagoy=UID1001/GID1001, master=UID1000/GID1000
+- name: Fix UID mismatch on worker via boot-time service
   hosts: workers
   become: true
   gather_facts: false
   tasks:
-    - name: Swap UIDs/GIDs to match master node layout
-      ansible.builtin.shell: |
-        set -e
+    - name: Write UID fix script
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/fix_uids.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          groupmod -g 1000 master
+          groupmod -g 1001 blagoy
+          usermod  -u 9999 blagoy
+          find /home/blagoy -user 1000 -exec chown -h 9999 {} +
+          usermod  -u 1000 master
+          find /home/master -user 1001 -exec chown -h 1000 {} +
+          usermod  -u 1001 blagoy
+          find /home/blagoy -user 9999 -exec chown -h 1001 {} +
+          systemctl disable fix-uids
 
-        # Step 1: move blagoy out of the way
-        groupmod -g 9999 blagoy
-        usermod  -u 9999 blagoy
-        find /home/blagoy -user 1000 -exec chown -h 9999 {} +
-        find /home/blagoy -group 1000 -exec chgrp -h 9999 {} +
+    - name: Install fix-uids systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/fix-uids.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Fix UID mismatch (runs once at boot)
+          After=local-fs.target
+          Before=network.target
 
-        # Step 2: master → UID/GID 1000  (now free)
-        groupmod -g 1000 master
-        usermod  -u 1000 master
-        find /home/master -user 1001 -exec chown -h 1000 {} +
-        find /home/master -group 1001 -exec chgrp -h 1000 {} +
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/fix_uids.sh
 
-        # Step 3: blagoy → UID/GID 1001  (now free)
-        groupmod -g 1001 blagoy
-        usermod  -u 1001 blagoy
-        find /home/blagoy -user 9999 -exec chown -h 1001 {} +
-        find /home/blagoy -group 9999 -exec chgrp -h 1001 {} +
-      args:
-        executable: /bin/bash
-      changed_when: true
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable fix-uids service
+      ansible.builtin.systemd:
+        name: fix-uids
+        enabled: true
+        daemon_reload: true
+
+    - name: Reboot worker
+      ansible.builtin.reboot:
+        reboot_timeout: 120
+
+    - name: Verify UIDs after reboot
+      ansible.builtin.command: id "{{ item }}"
+      loop:
+        - blagoy
+        - master
+      register: id_out
+
+    - name: Show UID results
+      ansible.builtin.debug:
+        msg: "{{ item.stdout }}"
+      loop: "{{ id_out.results }}"
