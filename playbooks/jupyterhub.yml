@@ -53,6 +53,8 @@
     - name: Create blagoy system user on master for JupyterHub login
       ansible.builtin.user:
         name: blagoy
+        uid: 1001
+        group: blagoy
         create_home: true
         shell: /bin/bash
         state: present
@@ -107,6 +109,8 @@
     - name: Create master user on worker for Slurm job execution
       ansible.builtin.user:
         name: master
+        uid: 1000
+        group: master
         create_home: true
         shell: /bin/bash
         state: present
