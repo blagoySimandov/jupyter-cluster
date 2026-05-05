@@ -1,0 +1,69 @@
+---
+# Runs on [gpu_nodes]. To add GPU support to a new worker:
+#   1. Add the host to [workers] in inventory.ini
+#   2. Add the same host under [gpu_nodes:children] or directly to [gpu_nodes]
+- name: Configure GPU nodes (CUDA + NVIDIA drivers)
+  hosts: gpu_nodes
+  become: true
+  tasks:
+    - name: Download CUDA keyring package
+      ansible.builtin.get_url:
+        url: "{{ cuda_keyring_url }}"
+        dest: /tmp/cuda-keyring.deb
+        mode: "0644"
+
+    - name: Install CUDA keyring (adds NVIDIA apt repo + GPG key)
+      ansible.builtin.apt:
+        deb: /tmp/cuda-keyring.deb
+
+    - name: Update apt cache after adding CUDA repo
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install CUDA toolkit and NVIDIA drivers
+      ansible.builtin.apt:
+        name:
+          - "cuda-toolkit-{{ cuda_version }}"
+          - cuda-drivers
+        state: present
+
+    - name: Set CUDA paths system-wide (login shells and Slurm job environments)
+      ansible.builtin.copy:
+        dest: /etc/profile.d/cuda.sh
+        mode: "0644"
+        content: |
+          export PATH=/usr/local/cuda/bin:$PATH
+          export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+
+    - name: Enable nvidia-persistenced (keeps GPU initialized, reduces Jupyter/Slurm latency)
+      ansible.builtin.systemd:
+        name: nvidia-persistenced
+        enabled: true
+        state: started
+      # Service only exists after driver loads; a reboot may be needed on first run.
+      ignore_errors: true
+
+    - name: Check whether a reboot is required after driver install
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_flag
+
+    - name: Warn if reboot required before GPU is accessible
+      ansible.builtin.debug:
+        msg: >-
+          Reboot required to load NVIDIA kernel module.
+          After reboot, re-run this playbook or run: ansible-playbook playbooks/gpu.yml --tags verify
+      when: reboot_flag.stat.exists
+
+    - name: Verify GPU access with nvidia-smi
+      ansible.builtin.command: nvidia-smi
+      register: nvidia_smi_out
+      changed_when: false
+      failed_when: nvidia_smi_out.rc != 0 and not reboot_flag.stat.exists
+      tags: verify
+
+    - name: Display nvidia-smi output
+      ansible.builtin.debug:
+        var: nvidia_smi_out.stdout_lines
+      when: nvidia_smi_out.rc == 0
+      tags: verify

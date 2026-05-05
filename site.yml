@@ -1,0 +1,6 @@
+---
+# Entry point: provisions the full cluster.
+# Run: ansible-playbook site.yml
+# Run single layer: ansible-playbook playbooks/gpu.yml
+- import_playbook: playbooks/common.yml
+- import_playbook: playbooks/gpu.yml

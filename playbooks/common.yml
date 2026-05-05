@@ -1,0 +1,22 @@
+---
+# Runs on every cluster node. Adding a host to [workers] is enough to pick this up.
+- name: Common node setup
+  hosts: cluster
+  become: true
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - build-essential
+          - python3-pip
+          - python3-dev
+          - git
+          - curl
+          - wget
+          - htop
+        state: present
