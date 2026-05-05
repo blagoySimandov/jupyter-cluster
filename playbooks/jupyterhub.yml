@@ -111,6 +111,11 @@
         shell: /bin/bash
         state: present
 
+    - name: Open notebook port range on worker firewall
+      ansible.builtin.command: ufw allow 1024:65535/tcp
+      changed_when: false
+      failed_when: false
+
     - name: Install python3-venv on worker
       ansible.builtin.apt:
         name: python3.12-venv
