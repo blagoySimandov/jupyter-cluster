@@ -24,54 +24,6 @@
         state: present
         update_cache: true
 
-    - name: Get munge UID
-      ansible.builtin.command: id -u munge
-      register: munge_uid
-      changed_when: false
-
-    - name: Get munge GID
-      ansible.builtin.command: id -g munge
-      register: munge_gid
-      changed_when: false
-
-    # Ansible tasks run on all hosts before advancing — so by here,
-    # hostvars has munge_uid/gid from every node. Use master as canonical.
-    - name: Align munge UID with master on nodes that differ
-      when:
-        - inventory_hostname not in groups['master']
-        - munge_uid.stdout != hostvars[groups['master'][0]]['munge_uid']['stdout']
-      block:
-        - name: Stop munge before UID change
-          ansible.builtin.systemd:
-            name: munge
-            state: stopped
-          failed_when: false
-
-        - name: Set munge UID to match master
-          ansible.builtin.command: >
-            usermod -u {{ hostvars[groups['master'][0]]['munge_uid']['stdout'] }} munge
-
-        - name: Fix ownership of munge dirs after UID change
-          ansible.builtin.file:
-            path: "{{ item }}"
-            owner: munge
-            group: munge
-            recurse: true
-          loop:
-            - /etc/munge
-            - /var/log/munge
-            - /var/lib/munge
-          failed_when: false
-
-    - name: Align munge GID with master on nodes that differ
-      when:
-        - inventory_hostname not in groups['master']
-        - munge_gid.stdout != hostvars[groups['master'][0]]['munge_gid']['stdout']
-      block:
-        - name: Set munge GID to match master
-          ansible.builtin.command: >
-            groupmod -g {{ hostvars[groups['master'][0]]['munge_gid']['stdout'] }} munge
-
     - name: Create /etc/slurm
       ansible.builtin.file:
         path: /etc/slurm
