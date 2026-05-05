@@ -39,21 +39,22 @@
         state: started
       ignore_errors: true
 
-    - name: Check whether reboot is required to load nvidia.ko
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: reboot_flag
+    - name: Check if NVIDIA kernel module is loaded
+      ansible.builtin.shell: lsmod | grep -q "^nvidia "
+      register: nvidia_module
+      changed_when: false
+      failed_when: false
 
-    - name: Warn if reboot required before GPU is accessible
+    - name: Warn if NVIDIA module not loaded (reboot required)
       ansible.builtin.debug:
-        msg: "Reboot required. After reboot run: make verify"
-      when: reboot_flag.stat.exists
+        msg: "NVIDIA kernel module not loaded. Run: make reboot-workers && make verify"
+      when: nvidia_module.rc != 0
 
     - name: Verify GPU access with nvidia-smi
       ansible.builtin.command: nvidia-smi
       register: nvidia_smi_out
       changed_when: false
-      failed_when: nvidia_smi_out.rc != 0 and not reboot_flag.stat.exists
+      failed_when: nvidia_smi_out.rc != 0 and nvidia_module.rc == 0
       tags: verify
 
     - name: Display nvidia-smi output
