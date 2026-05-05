@@ -31,6 +31,9 @@ c.BatchSpawnerBase.batch_script = """#!/bin/bash
 source /etc/profile.d/cuda.sh
 source /opt/jupyter-worker/bin/activate
 
+export HOME=/home/{username}
+export JUPYTER_RUNTIME_DIR=$(mktemp -d /tmp/jupyter-runtime-XXXXXX)
+
 {cmd}
 """
 
