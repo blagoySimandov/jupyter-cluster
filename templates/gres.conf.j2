@@ -1,4 +1,3 @@
-# Managed by Ansible — do not edit manually
 {% for dev in slurm_gres_devices %}
 Name={{ dev.name }}{% if dev.type is defined %} Type={{ dev.type }}{% endif %} File={{ dev.file }}
 {% endfor %}
