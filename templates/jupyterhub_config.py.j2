@@ -16,6 +16,7 @@ c.JupyterHub.cookie_secret_file = '/var/lib/jupyterhub/jupyterhub_cookie_secret'
 c.JupyterHub.spawner_class = 'batchspawner.SlurmSpawner'
 
 c.Spawner.ip = '0.0.0.0'
+c.Spawner.notebook_dir = '~'
 
 c.SlurmSpawner.req_partition = 'compute'
 c.SlurmSpawner.req_nprocs = '4'
