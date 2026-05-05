@@ -37,3 +37,4 @@ source /opt/jupyter-worker/bin/activate
 # Users must exist on master (auth) AND on worker (Slurm job execution).
 # After first run, set passwords: sudo passwd <user> on each node as needed.
 c.Authenticator.admin_users = {'master', 'blagoy'}
+c.Authenticator.allow_all = True
