@@ -8,7 +8,7 @@ ANSIBLE_PRIV  := ansible -i $(INVENTORY) --ask-become-pass
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install provision gpu slurm jupyterhub fix-uids ping verify test-slurm syntax-check reboot-master reboot-workers
+.PHONY: help install provision gpu slurm jupyterhub ping verify test-slurm syntax-check reboot-master reboot-workers
 
 help:
 	@echo ""
@@ -20,7 +20,6 @@ help:
 	@echo "    gpu              CUDA/driver install on gpu_nodes"
 	@echo "    slurm            Slurm install/config on all nodes"
 	@echo "    jupyterhub       JupyterHub + PyTorch GPU kernel"
-	@echo "    fix-uids         align worker UIDs to match master (no active sessions on worker)"
 	@echo ""
 	@echo "  Verify"
 	@echo "    ping             SSH connectivity check (all nodes)"
@@ -49,9 +48,6 @@ slurm:
 
 jupyterhub:
 	$(PLAYBOOK_PRIV) playbooks/jupyterhub.yml
-
-fix-uids:
-	$(PLAYBOOK_PRIV) playbooks/fix_uids.yml
 
 # ── Verify ───────────────────────────────────────────────────────────────────
 ping:
