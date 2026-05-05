@@ -1,47 +1,64 @@
 export PATH := $(HOME)/.local/bin:$(PATH)
 
-INVENTORY      := inventory.ini
-PLAYBOOK       := ansible-playbook -i $(INVENTORY)
-PLAYBOOK_PRIV  := ansible-playbook -i $(INVENTORY) --ask-become-pass
-ANSIBLE_PRIV   := ansible -i $(INVENTORY) --ask-become-pass
+INVENTORY     := inventory.ini
+PLAYBOOK      := ansible-playbook -i $(INVENTORY)
+PLAYBOOK_PRIV := ansible-playbook -i $(INVENTORY) --ask-become-pass
+ANSIBLE       := ansible -i $(INVENTORY)
+ANSIBLE_PRIV  := ansible -i $(INVENTORY) --ask-become-pass
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install ping syntax-check deploy common gpu verify reboot-master reboot-workers
+.PHONY: help install provision gpu slurm ping verify test-slurm syntax-check reboot-master reboot-workers
 
 help:
-	@echo "Targets:"
-	@echo "  install        pip install -r requirements.txt --user"
-	@echo "  ping           connectivity check (all nodes)"
-	@echo "  syntax-check   validate all playbooks"
-	@echo "  deploy         run site.yml (common + gpu)"
-	@echo "  common         run common setup only (all nodes)"
-	@echo "  gpu            run CUDA/driver install (gpu_nodes)"
-	@echo "  verify         run nvidia-smi check after reboot"
-	@echo "  reboot-master  reboot master and wait for SSH"
-	@echo "  reboot-workers reboot all workers and wait for SSH"
+	@echo ""
+	@echo "  Bootstrap"
+	@echo "    install          pip install -r requirements.txt --user"
+	@echo ""
+	@echo "  Provision"
+	@echo "    provision        full cluster setup (common + gpu + slurm)"
+	@echo "    gpu              CUDA/driver install on gpu_nodes"
+	@echo "    slurm            Slurm install/config on all nodes"
+	@echo ""
+	@echo "  Verify"
+	@echo "    ping             SSH connectivity check (all nodes)"
+	@echo "    syntax-check     validate all playbooks"
+	@echo "    verify           nvidia-smi check on gpu_nodes"
+	@echo "    test-slurm       submit srun hostname job"
+	@echo ""
+	@echo "  Ops"
+	@echo "    reboot-master    reboot master and wait for SSH"
+	@echo "    reboot-workers   reboot all workers and wait for SSH"
+	@echo ""
 
+# ── Bootstrap ────────────────────────────────────────────────────────────────
 install:
 	python3 -m pip install -r requirements.txt --user --break-system-packages
 
+# ── Provision ────────────────────────────────────────────────────────────────
+provision:
+	$(PLAYBOOK_PRIV) site.yml
+
+gpu:
+	$(PLAYBOOK_PRIV) playbooks/gpu.yml
+
+slurm:
+	$(PLAYBOOK_PRIV) playbooks/slurm.yml
+
+# ── Verify ───────────────────────────────────────────────────────────────────
 ping:
 	$(PLAYBOOK) ping.yml
 
 syntax-check:
 	$(PLAYBOOK) site.yml --syntax-check
 
-deploy:
-	$(PLAYBOOK_PRIV) site.yml
-
-common:
-	$(PLAYBOOK_PRIV) playbooks/common.yml
-
-gpu:
-	$(PLAYBOOK_PRIV) playbooks/gpu.yml
-
 verify:
 	$(PLAYBOOK_PRIV) playbooks/gpu.yml --tags verify
 
+test-slurm:
+	$(ANSIBLE) master -m command -a "srun --partition=compute --nodes=1 hostname"
+
+# ── Ops ──────────────────────────────────────────────────────────────────────
 reboot-master:
 	$(ANSIBLE_PRIV) master -m reboot --become
 

@@ -1,0 +1,7 @@
+---
+# Slurm GRES: exposed as gpu:gtx1080 so jobs can request --gres=gpu:gtx1080:1
+slurm_gres: "gpu:gtx1080:1"
+slurm_gres_devices:
+  - name: gpu
+    type: gtx1080
+    file: /dev/nvidia0
