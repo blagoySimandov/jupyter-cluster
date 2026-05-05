@@ -10,12 +10,15 @@
   hosts: master
   become: true
   gather_facts: false
+  vars:
+    jhub_venv: /opt/jupyterhub
   tasks:
-    - name: Install Node.js and npm (required for configurable-http-proxy)
+    - name: Install Node.js, npm, and python3-venv
       ansible.builtin.apt:
         name:
           - nodejs
           - npm
+          - python3.12-venv
         state: present
         update_cache: true
 
@@ -24,21 +27,14 @@
         cmd: npm install -g configurable-http-proxy
         creates: /usr/local/bin/configurable-http-proxy
 
-    - name: Download get-pip.py
-      ansible.builtin.get_url:
-        url: https://bootstrap.pypa.io/get-pip.py
-        dest: /tmp/get-pip.py
-        mode: '0644'
-
-    - name: Bootstrap pip system-wide
+    - name: Create JupyterHub virtualenv
       ansible.builtin.command:
-        cmd: python3 /tmp/get-pip.py --break-system-packages
-        creates: /usr/local/lib/python3.12/dist-packages/pip/__init__.py
+        cmd: python3 -m venv {{ jhub_venv }}
+        creates: "{{ jhub_venv }}/bin/python"
 
-    - name: Install JupyterHub, JupyterLab, batchspawner
-      ansible.builtin.command: >
-        python3 -m pip install jupyterhub jupyterlab notebook batchspawner
-        --break-system-packages
+    - name: Install JupyterHub, JupyterLab, batchspawner into venv
+      ansible.builtin.command:
+        cmd: "{{ jhub_venv }}/bin/pip install jupyterhub jupyterlab notebook batchspawner"
       register: pip_out
       changed_when: "'Successfully installed' in pip_out.stdout"
 
@@ -53,7 +49,7 @@
         - /etc/jupyterhub
         - /var/lib/jupyterhub
 
-    # blagoy must exist on master for PAM auth; master user exists there already.
+    # blagoy must exist on master for PAM auth; master user already exists there.
     - name: Create blagoy system user on master for JupyterHub login
       ansible.builtin.user:
         name: blagoy
@@ -103,9 +99,11 @@
   hosts: gpu_nodes
   become: true
   gather_facts: false
+  vars:
+    worker_venv: /opt/jupyter-worker
   tasks:
     # master must exist on worker so Slurm can run jobs submitted by that user.
-    # Also fixes the /home/master not found warning from srun test.
+    # Also fixes the /home/master not found warning from the srun test.
     - name: Create master user on worker for Slurm job execution
       ansible.builtin.user:
         name: master
@@ -113,38 +111,37 @@
         shell: /bin/bash
         state: present
 
-    - name: Download get-pip.py on worker
-      ansible.builtin.get_url:
-        url: https://bootstrap.pypa.io/get-pip.py
-        dest: /tmp/get-pip.py
-        mode: '0644'
+    - name: Install python3-venv on worker
+      ansible.builtin.apt:
+        name: python3.12-venv
+        state: present
+        update_cache: true
 
-    - name: Bootstrap pip system-wide on worker
+    - name: Create worker virtualenv
       ansible.builtin.command:
-        cmd: python3 /tmp/get-pip.py --break-system-packages
-        creates: /usr/local/lib/python3.12/dist-packages/pip/__init__.py
+        cmd: python3 -m venv {{ worker_venv }}
+        creates: "{{ worker_venv }}/bin/python"
 
-    - name: Install jupyterhub-singleuser and kernel support packages
-      ansible.builtin.command: >
-        python3 -m pip install jupyterhub jupyterlab notebook ipykernel
-        --break-system-packages
+    - name: Install jupyterhub-singleuser and kernel support into venv
+      ansible.builtin.command:
+        cmd: "{{ worker_venv }}/bin/pip install jupyterhub jupyterlab notebook ipykernel"
       register: pip_out
       changed_when: "'Successfully installed' in pip_out.stdout"
 
     # PyTorch cu124 matches nvidia-driver-550 (CUDA 12.4 runtime capability).
     # ~2 GB download — this task takes several minutes.
-    - name: Install PyTorch with CUDA 12.4 support
-      ansible.builtin.command: >
-        python3 -m pip install torch torchvision
-        --break-system-packages
-        --index-url https://download.pytorch.org/whl/cu124
+    - name: Install PyTorch with CUDA 12.4 support into venv
+      ansible.builtin.command:
+        cmd: >
+          {{ worker_venv }}/bin/pip install torch torchvision
+          --index-url https://download.pytorch.org/whl/cu124
       register: pip_out
       changed_when: "'Successfully installed' in pip_out.stdout"
 
     - name: Register PyTorch GPU kernel system-wide
       ansible.builtin.command:
         cmd: >
-          python3 -m ipykernel install
+          {{ worker_venv }}/bin/python -m ipykernel install
           --name pytorch-gpu
           --display-name "Python (PyTorch GPU)"
         creates: /usr/local/share/jupyter/kernels/pytorch-gpu/kernel.json

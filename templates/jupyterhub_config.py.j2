@@ -27,6 +27,7 @@ c.BatchSpawnerBase.batch_script = """#!/bin/bash
 #SBATCH --error=/tmp/jupyterhub-singleuser-%j.err
 
 source /etc/profile.d/cuda.sh
+source /opt/jupyter-worker/bin/activate
 
 {cmd}
 """
