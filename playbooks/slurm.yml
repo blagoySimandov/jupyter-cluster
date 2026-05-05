@@ -16,38 +16,6 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Create munge group with fixed GID
-      ansible.builtin.group:
-        name: munge
-        gid: 992
-        system: true
-        state: present
-
-    - name: Create munge user with fixed UID
-      ansible.builtin.user:
-        name: munge
-        uid: 992
-        group: munge
-        system: true
-        shell: /usr/sbin/nologin
-        create_home: false
-
-    - name: Create slurm group with fixed GID
-      ansible.builtin.group:
-        name: slurm
-        gid: 991
-        system: true
-        state: present
-
-    - name: Create slurm user with fixed UID
-      ansible.builtin.user:
-        name: slurm
-        uid: 991
-        group: slurm
-        system: true
-        shell: /usr/sbin/nologin
-        create_home: false
-
     - name: Install munge and slurm-client
       ansible.builtin.apt:
         name:
@@ -55,6 +23,21 @@
           - slurm-client
         state: present
         update_cache: true
+
+    - name: Get munge UID
+      ansible.builtin.command: id -u munge
+      register: munge_uid
+      changed_when: false
+
+    - name: Assert munge UID is consistent across cluster
+      ansible.builtin.assert:
+        that: hostvars[item]['munge_uid']['stdout'] == munge_uid.stdout
+        fail_msg: >-
+          munge UID mismatch: {{ inventory_hostname }}={{ munge_uid.stdout }}
+          vs {{ item }}={{ hostvars[item]['munge_uid']['stdout'] }}.
+          Fix with: usermod -u <uid> munge on the mismatched node.
+      loop: "{{ groups['cluster'] }}"
+      when: hostvars[item]['munge_uid'] is defined
 
     - name: Create /etc/slurm
       ansible.builtin.file:
