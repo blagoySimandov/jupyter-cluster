@@ -25,15 +25,11 @@
         creates: /usr/local/bin/configurable-http-proxy
 
     - name: Install JupyterHub, JupyterLab, batchspawner
-      ansible.builtin.pip:
-        name:
-          - jupyterhub
-          - jupyterlab
-          - notebook
-          - batchspawner
-        executable: pip3
-        state: present
-        extra_args: --break-system-packages
+      ansible.builtin.command: >
+        python3 -m pip install jupyterhub jupyterlab notebook batchspawner
+        --break-system-packages
+      register: pip_out
+      changed_when: "'Successfully installed' in pip_out.stdout"
 
     - name: Create JupyterHub config and runtime directories
       ansible.builtin.file:
@@ -107,26 +103,21 @@
         state: present
 
     - name: Install jupyterhub-singleuser and kernel support packages
-      ansible.builtin.pip:
-        name:
-          - jupyterhub
-          - jupyterlab
-          - notebook
-          - ipykernel
-        executable: pip3
-        state: present
-        extra_args: --break-system-packages
+      ansible.builtin.command: >
+        python3 -m pip install jupyterhub jupyterlab notebook ipykernel
+        --break-system-packages
+      register: pip_out
+      changed_when: "'Successfully installed' in pip_out.stdout"
 
     # PyTorch cu124 matches nvidia-driver-550 (CUDA 12.4 runtime capability).
     # ~2 GB download — this task takes several minutes.
     - name: Install PyTorch with CUDA 12.4 support
-      ansible.builtin.pip:
-        name:
-          - torch
-          - torchvision
-        executable: pip3
-        state: present
-        extra_args: "--break-system-packages --index-url https://download.pytorch.org/whl/cu124"
+      ansible.builtin.command: >
+        python3 -m pip install torch torchvision
+        --break-system-packages
+        --index-url https://download.pytorch.org/whl/cu124
+      register: pip_out
+      changed_when: "'Successfully installed' in pip_out.stdout"
 
     - name: Register PyTorch GPU kernel system-wide
       ansible.builtin.command:
