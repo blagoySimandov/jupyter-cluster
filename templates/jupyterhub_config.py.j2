@@ -1,0 +1,40 @@
+# Managed by Ansible — do not edit manually
+
+import batchspawner  # noqa: F401
+
+# ── Network ───────────────────────────────────────────────────────────────────
+c.JupyterHub.bind_url = 'http://:8000'
+c.JupyterHub.hub_ip = '0.0.0.0'
+
+# Compute nodes connect back to hub on this IP — must be reachable from worker.
+c.JupyterHub.hub_connect_ip = '{{ hostvars[groups["master"][0]]["ansible_host"] }}'
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+c.JupyterHub.db_url = 'sqlite:////var/lib/jupyterhub/jupyterhub.sqlite'
+c.JupyterHub.cookie_secret_file = '/var/lib/jupyterhub/jupyterhub_cookie_secret'
+
+# ── Spawner: SlurmSpawner ─────────────────────────────────────────────────────
+# Each notebook server runs as a Slurm job on the compute partition.
+c.JupyterHub.spawner_class = 'batchspawner.SlurmSpawner'
+
+c.SlurmSpawner.req_partition = 'compute'
+c.SlurmSpawner.req_nprocs = '4'
+c.SlurmSpawner.req_memory = '8G'
+c.SlurmSpawner.req_gres = 'gpu:1'
+c.SlurmSpawner.req_runtime = '08:00:00'
+
+# {cmd} is replaced by JupyterHub with the jupyterhub-singleuser invocation.
+c.BatchSpawnerBase.batch_script = """#!/bin/bash
+#SBATCH --output=/tmp/jupyterhub-singleuser-%j.out
+#SBATCH --error=/tmp/jupyterhub-singleuser-%j.err
+
+source /etc/profile.d/cuda.sh
+
+{cmd}
+"""
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+# PAMAuthenticator (default) — validates against system accounts on master.
+# Users must exist on master (auth) AND on worker (Slurm job execution).
+# After first run, set passwords: sudo passwd <user> on each node as needed.
+c.Authenticator.admin_users = {'master', 'blagoy'}

@@ -1,0 +1,14 @@
+# Managed by Ansible — do not edit manually
+[Unit]
+Description=JupyterHub
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/jupyterhub -f /etc/jupyterhub/jupyterhub_config.py
+WorkingDirectory=/var/lib/jupyterhub
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

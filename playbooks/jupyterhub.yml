@@ -1,0 +1,137 @@
+---
+# Play 1: gather facts — hub_connect_ip template var needs master's ansible_host
+- name: Gather facts from all cluster nodes
+  hosts: cluster
+  gather_facts: true
+  tasks: []
+
+# Play 2: JupyterHub on master ─────────────────────────────────────────────────
+- name: Install and configure JupyterHub
+  hosts: master
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Install Node.js and npm (required for configurable-http-proxy)
+      ansible.builtin.apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+        update_cache: true
+
+    - name: Install configurable-http-proxy
+      ansible.builtin.command:
+        cmd: npm install -g configurable-http-proxy
+        creates: /usr/local/bin/configurable-http-proxy
+
+    - name: Install JupyterHub, JupyterLab, batchspawner
+      ansible.builtin.pip:
+        name:
+          - jupyterhub
+          - jupyterlab
+          - notebook
+          - batchspawner
+        executable: pip3
+        state: present
+        extra_args: --break-system-packages
+
+    - name: Create JupyterHub config and runtime directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - /etc/jupyterhub
+        - /var/lib/jupyterhub
+
+    # blagoy must exist on master for PAM auth; master user exists there already.
+    - name: Create blagoy system user on master for JupyterHub login
+      ansible.builtin.user:
+        name: blagoy
+        create_home: true
+        shell: /bin/bash
+        state: present
+
+    - name: Open port 8000 in firewall
+      ansible.builtin.command: ufw allow 8000/tcp
+      changed_when: false
+      failed_when: false
+
+    - name: Deploy jupyterhub_config.py
+      ansible.builtin.template:
+        src: ../templates/jupyterhub_config.py.j2
+        dest: /etc/jupyterhub/jupyterhub_config.py
+        owner: root
+        group: root
+        mode: '0600'
+      notify: restart jupyterhub
+
+    - name: Deploy jupyterhub systemd service
+      ansible.builtin.template:
+        src: ../templates/jupyterhub.service.j2
+        dest: /etc/systemd/system/jupyterhub.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart jupyterhub
+
+    - name: Enable and start JupyterHub
+      ansible.builtin.systemd:
+        name: jupyterhub
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: restart jupyterhub
+      ansible.builtin.systemd:
+        name: jupyterhub
+        state: restarted
+        daemon_reload: true
+
+# Play 3: GPU kernel on compute nodes ─────────────────────────────────────────
+- name: Install GPU kernel on compute nodes
+  hosts: gpu_nodes
+  become: true
+  gather_facts: false
+  tasks:
+    # master must exist on worker so Slurm can run jobs submitted by that user.
+    # Also fixes the /home/master not found warning from srun test.
+    - name: Create master user on worker for Slurm job execution
+      ansible.builtin.user:
+        name: master
+        create_home: true
+        shell: /bin/bash
+        state: present
+
+    - name: Install jupyterhub-singleuser and kernel support packages
+      ansible.builtin.pip:
+        name:
+          - jupyterhub
+          - jupyterlab
+          - notebook
+          - ipykernel
+        executable: pip3
+        state: present
+        extra_args: --break-system-packages
+
+    # PyTorch cu124 matches nvidia-driver-550 (CUDA 12.4 runtime capability).
+    # ~2 GB download — this task takes several minutes.
+    - name: Install PyTorch with CUDA 12.4 support
+      ansible.builtin.pip:
+        name:
+          - torch
+          - torchvision
+        executable: pip3
+        state: present
+        extra_args: "--break-system-packages --index-url https://download.pytorch.org/whl/cu124"
+
+    - name: Register PyTorch GPU kernel system-wide
+      ansible.builtin.command:
+        cmd: >
+          python3 -m ipykernel install
+          --name pytorch-gpu
+          --display-name "Python (PyTorch GPU)"
+        creates: /usr/local/share/jupyter/kernels/pytorch-gpu/kernel.json

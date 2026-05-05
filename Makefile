@@ -8,7 +8,7 @@ ANSIBLE_PRIV  := ansible -i $(INVENTORY) --ask-become-pass
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install provision gpu slurm ping verify test-slurm syntax-check reboot-master reboot-workers
+.PHONY: help install provision gpu slurm jupyterhub ping verify test-slurm syntax-check reboot-master reboot-workers
 
 help:
 	@echo ""
@@ -19,6 +19,7 @@ help:
 	@echo "    provision        full cluster setup (common + gpu + slurm)"
 	@echo "    gpu              CUDA/driver install on gpu_nodes"
 	@echo "    slurm            Slurm install/config on all nodes"
+	@echo "    jupyterhub       JupyterHub + PyTorch GPU kernel"
 	@echo ""
 	@echo "  Verify"
 	@echo "    ping             SSH connectivity check (all nodes)"
@@ -44,6 +45,9 @@ gpu:
 
 slurm:
 	$(PLAYBOOK_PRIV) playbooks/slurm.yml
+
+jupyterhub:
+	$(PLAYBOOK_PRIV) playbooks/jupyterhub.yml
 
 # ── Verify ───────────────────────────────────────────────────────────────────
 ping:
