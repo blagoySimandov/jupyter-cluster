@@ -1,7 +1,4 @@
 ---
-# Target Ubuntu 24.04 x86_64 CUDA repo. Bump cuda_version to upgrade toolkit.
-cuda_version: "12-6"
-cuda_ubuntu_codename: "ubuntu2404"
-cuda_arch: "x86_64"
-cuda_keyring_url: >-
-  https://developer.download.nvidia.com/compute/cuda/repos/{{ cuda_ubuntu_codename }}/{{ cuda_arch }}/cuda-keyring_1.1-1_all.deb
+# nvidia-driver-550 supports CUDA 12.4 and covers GTX 1080 (Pascal) through Ada.
+# Bump nvidia_driver_version to upgrade; toolkit version follows the driver.
+nvidia_driver_version: "550"

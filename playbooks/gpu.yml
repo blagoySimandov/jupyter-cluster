@@ -1,64 +1,52 @@
 ---
 # Runs on [gpu_nodes]. To add GPU support to a new worker:
 #   1. Add the host to [workers] in inventory.ini
-#   2. Add the same host under [gpu_nodes:children] or directly to [gpu_nodes]
-- name: Configure GPU nodes (CUDA + NVIDIA drivers)
+#   2. Add the same hostname under [gpu_nodes:children] in inventory.ini
+- name: Configure GPU nodes (NVIDIA drivers + CUDA toolkit)
   hosts: gpu_nodes
   become: true
   tasks:
-    - name: Install kernel headers (DKMS needs these to compile nvidia.ko)
-      ansible.builtin.apt:
-        name:
-          - linux-headers-{{ ansible_kernel }}
-        state: present
-
-    - name: Download CUDA keyring package
-      ansible.builtin.get_url:
-        url: "{{ cuda_keyring_url }}"
-        dest: /tmp/cuda-keyring.deb
-        mode: "0644"
-
-    - name: Install CUDA keyring (adds NVIDIA apt repo + GPG key)
-      ansible.builtin.apt:
-        deb: /tmp/cuda-keyring.deb
-
-    - name: Update apt cache after adding CUDA repo
+    - name: Update apt cache
       ansible.builtin.apt:
         update_cache: true
+        cache_valid_time: 3600
 
-    - name: Install CUDA toolkit and NVIDIA drivers
+    - name: Install kernel headers (DKMS needs these to compile nvidia.ko)
       ansible.builtin.apt:
-        name:
-          - "cuda-toolkit-{{ cuda_version }}"
-          - cuda-drivers
+        name: linux-headers-{{ ansible_kernel }}
         state: present
 
-    - name: Set CUDA paths system-wide (login shells and Slurm job environments)
+    - name: Install NVIDIA driver and CUDA toolkit
+      ansible.builtin.apt:
+        name:
+          - nvidia-driver-{{ nvidia_driver_version }}
+          - nvidia-cuda-toolkit
+        state: present
+
+    - name: Set CUDA_HOME for build tools (cmake, pip install, etc.)
       ansible.builtin.copy:
         dest: /etc/profile.d/cuda.sh
         mode: "0644"
         content: |
-          export PATH=/usr/local/cuda/bin:$PATH
-          export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+          export CUDA_HOME=/usr
+          export PATH=/usr/lib/cuda/bin${PATH:+:$PATH}
+          export LD_LIBRARY_PATH=/usr/lib/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
-    - name: Enable nvidia-persistenced (keeps GPU initialized, reduces Jupyter/Slurm latency)
+    - name: Enable nvidia-persistenced (reduces GPU init latency for Jupyter/Slurm)
       ansible.builtin.systemd:
         name: nvidia-persistenced
         enabled: true
         state: started
-      # Service only exists after driver loads; a reboot may be needed on first run.
       ignore_errors: true
 
-    - name: Check whether a reboot is required after driver install
+    - name: Check whether reboot is required to load nvidia.ko
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: reboot_flag
 
     - name: Warn if reboot required before GPU is accessible
       ansible.builtin.debug:
-        msg: >-
-          Reboot required to load NVIDIA kernel module.
-          After reboot, re-run this playbook or run: ansible-playbook playbooks/gpu.yml --tags verify
+        msg: "Reboot required. After reboot run: make verify"
       when: reboot_flag.stat.exists
 
     - name: Verify GPU access with nvidia-smi
